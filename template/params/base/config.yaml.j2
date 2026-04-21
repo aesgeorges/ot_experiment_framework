@@ -1,0 +1,56 @@
+# =============================================================================
+# Baseline OceanTracker configuration for experiment: {{ name }}
+# Generated from: {{ _config_file }}
+#
+# This file is the baseline config.  Run-specific overrides live in prod/.
+# setup.py merges prod/ overrides on top of this file at runtime.
+# =============================================================================
+
+experiment:
+  name: "{{ name }}"
+  description: "{{ description | default('') }}"
+
+# ---------------------------------------------------------------------------
+# Hydrodynamic reader
+# ---------------------------------------------------------------------------
+reader:
+  class_name: oceantracker.reader.schism_reader.SCHISMreaderNCDF
+  input_dir: "../data/hydro"
+  file_mask: "{{ reader.file_mask | default('*.nc') }}"
+
+# ---------------------------------------------------------------------------
+# Run settings
+# ---------------------------------------------------------------------------
+run:
+  root_output_dir: "../outputs/PTM"
+  output_file_base: "{{ name }}"
+  duration: {{ run.duration | default(86400) }}   # seconds
+  time_step: {{ run.time_step | default(120) }}    # seconds
+  write_tracks: {{ run.write_tracks | default(true) }}
+
+# ---------------------------------------------------------------------------
+# Release groups
+# ---------------------------------------------------------------------------
+release_groups:
+{%- for rg in release_groups | default([]) %}
+  - name: "{{ rg.name }}"
+    class_name: {{ rg.class_name | default('oceantracker.release_groups.point_release.PointRelease') }}
+    points:
+{%- for pt in rg.points | default([]) %}
+      - [{{ pt[0] }}, {{ pt[1] }}]
+{%- else %}
+      []  # placeholder — populate in setup.py
+{%- endfor %}
+    release_interval: {{ rg.release_interval | default(3600) }}
+    pulse_size: {{ rg.pulse_size | default(1) }}
+{%- endfor %}
+
+# ---------------------------------------------------------------------------
+# Particle properties (extend in setup.py as needed)
+# ---------------------------------------------------------------------------
+particle_properties: []
+
+# ---------------------------------------------------------------------------
+# Event loggers
+# ---------------------------------------------------------------------------
+event_loggers: []

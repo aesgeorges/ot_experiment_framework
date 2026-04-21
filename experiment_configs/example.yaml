@@ -1,0 +1,35 @@
+# =============================================================================
+# Example experiment configuration
+# Save a copy of this file as experiment_configs/<your_experiment>.yaml
+# then run: ot-generate experiment_configs/<your_experiment>.yaml
+# =============================================================================
+
+# Required: used as the experiment directory name (experiments/<name>/)
+name: example_run
+
+# Optional free-text description (injected into config.yaml header)
+description: "Particle release test from the harbour entrance"
+
+# ---------------------------------------------------------------------------
+# Reader settings  (merged into baseline config under 'reader:')
+# ---------------------------------------------------------------------------
+reader:
+  file_mask: "ocean_model_*.nc"
+
+# ---------------------------------------------------------------------------
+# Run settings  (merged into baseline config under 'run:')
+# ---------------------------------------------------------------------------
+run:
+  duration: 604800   # 7 days in seconds
+  time_step: 120     # seconds
+  write_tracks: true
+
+# ---------------------------------------------------------------------------
+# Release groups  (list; replaces the baseline placeholder list)
+# ---------------------------------------------------------------------------
+release_groups:
+  - name: harbour_entrance
+    points:
+      - [174.76, -36.85]   # [lon, lat]
+    release_interval: 3600  # release every hour
+    pulse_size: 10          # particles per release

@@ -1,0 +1,79 @@
+# =============================================================================
+# Example experiment configuration for Bayesian Inference of Source Locations
+# To generate experiment, save a copy of this file in experiment_configs/
+# then run: ot-generate experiment_configs/<your_experiment>.yaml
+# =============================================================================
+
+# Required: used as the experiment directory name (experiments/<name>/)
+name: bayesian_source_inference
+
+# Optional free-text description (injected into config.yaml header)
+description: >
+  Bayesian inference (with Stan) of particle source locations based
+  on observed catches at fake stations in the BayDelta.
+
+# ---------------------------------------------------------------------------
+# Reader settings  (merged into baseline config under 'reader:')
+# ---------------------------------------------------------------------------
+reader:
+  class_name: SCHISMreaderV5
+  file_mask: "*.nc"
+  input_dir: ../data/hydro/SCHISM/
+
+# ---------------------------------------------------------------------------
+# Run settings  (merged into baseline config under 'run:')
+# ---------------------------------------------------------------------------
+run:
+  duration: 259200   # 3 days in seconds
+  time_step: 120     # seconds
+  write_tracks: true
+
+# ---------------------------------------------------------------------------
+# Release groups  (list; replaces the baseline placeholder list)
+# ---------------------------------------------------------------------------
+release_groups:
+  - class_name: PolygonRelease
+    name: Cache
+    points: []
+    release_interval: 3600  # release every hour
+    pulse_size: 10          # particles per release
+  - class_name: PolygonRelease
+    name: Sacramento
+    points: []
+    release_interval: 3600  # release every hour
+    pulse_size: 10          # particles per release
+  - class_name: PolygonRelease
+    name: Mokelumne
+    points: []
+    release_interval: 3600  # release every hour
+    pulse_size: 10          # particles per release
+  - class_name: PolygonRelease
+    name: SouthDelta
+    points: []
+    release_interval: 3600  # release every hour
+    pulse_size: 10          # particles per release
+  - class_name: PolygonRelease
+    name: CentralDelta
+    points: []
+    release_interval: 3600  # release every hour
+    pulse_size: 10          # particles per release
+  - class_name: PolygonRelease
+    name: SuisunBay
+    points: []
+    release_interval: 3600  # release every hour
+    pulse_size: 10          # particles per release
+  - class_name: PolygonRelease
+    name: SuisunMarsh
+    points: []
+    release_interval: 3600  # release every hour
+    pulse_size: 10          # particles per release
+  - class_name: PolygonRelease
+    name: Confluence
+    points: []
+    release_interval: 3600  # release every hour
+    pulse_size: 10          # particles per release
+  - class_name: PolygonRelease
+    name: Carquinez
+    points: []
+    release_interval: 3600  # release every hour
+    pulse_size: 10          # particles per release
