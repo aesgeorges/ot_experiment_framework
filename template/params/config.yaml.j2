@@ -76,3 +76,11 @@ polygons:
 {%- else %}
     []  # populate with polygon file references
 {%- endfor %}
+
+# ---------------------------------------------------------------------------
+# OceanTracker run settings — read by setup.py
+# ---------------------------------------------------------------------------
+run:
+  duration: {{ run.duration | default(259200) }}    # seconds; 259200 = 3 days, 5184000 = 60 days
+  time_step: {{ run.time_step | default(120) }}      # seconds
+  write_tracks: {{ run.write_tracks | default(true) }}
