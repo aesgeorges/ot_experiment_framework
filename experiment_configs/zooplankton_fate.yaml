@@ -1,0 +1,115 @@
+# =============================================================================
+# Zooplankton Fate Experiment Configuration
+#
+# Reproduces the zooplankton_fate experiment (Sacramento River zooplankton
+# particle tracking into Suisun Bay / Suisun Marsh, summer and fall 2025).
+#
+# Usage:
+#   ot-generate experiment_configs/zooplankton_fate.yaml
+#
+# This generates experiments/zooplankton_fate/ from the template, with
+# params/config.yaml rendered from the values below.
+# Edit user: and paths: before running setup.
+# =============================================================================
+
+name: zooplankton_fate
+
+description: >
+  Sacramento River zooplankton particle tracking into Suisun Bay and
+  Suisun Marsh under historical and no-operations gate configurations,
+  summer and fall 2025.
+
+# ---------------------------------------------------------------------------
+# User / cluster settings — edit before use
+# ---------------------------------------------------------------------------
+user:
+  email: user@institution.edu
+  conda_path: /home/<user>/miniconda3/etc/profile.d/conda.sh
+  env: oceantracker
+  viz_env: oceantracker_viz
+  output_dir: "../outputs/ptm/"
+
+# ---------------------------------------------------------------------------
+# Paths (relative to experiment root after generation)
+# ---------------------------------------------------------------------------
+paths:
+  polygons_dir: ../data/polygons
+  oceantracker_base_dir: ../params/base
+  tile_cache_dir: ../outputs/animations/cartodb_tiles_cache
+  hindcasts_source_dir: /scratch/projects/zooplankton_fate/simulations/
+  hindcasts_symlink_dir: ../data/SCHISM/
+  use_symlink_inputs: false  # set true to build per-period symlink dirs from hindcasts_source_dir
+
+# ---------------------------------------------------------------------------
+# Flow configurations — one baseline OceanTracker YAML per gate scenario
+# Place the corresponding gate_<suffix>.yaml files in params/base/
+# ---------------------------------------------------------------------------
+flow_configs:
+  - name: Test
+    suffix: test
+  #- name: Historical (modified)
+  #  suffix: hist
+  #- name: No Operations
+  #  suffix: no_op
+
+# ---------------------------------------------------------------------------
+# Simulation periods
+# ---------------------------------------------------------------------------
+simulation_periods:
+  - name: summer
+    start_date: 2025-06-23
+    n_releases: 1
+    release_spacing_days: 7
+    start_id: 35   # SCHISM file id 1 → 2025-05-20; id 35 → 2025-06-23
+    end_id: 98     # id 98 → 2025-08-25
+
+  - name: fall
+    start_date: 2025-08-27
+    n_releases: 1
+    release_spacing_days: 7
+    start_id: 100  # test: 2 SCHISM files covering fall window
+    end_id: 101
+
+# ---------------------------------------------------------------------------
+# Polygons — shapefiles must be present in data/polygons/ after generation
+# ---------------------------------------------------------------------------
+polygons:
+  release_regions:
+    - name: Sacramento_Full
+      release: true
+      release_interval: 3600
+      pulse_size: 2000
+      file: release_full.shp
+    - name: Sacramento_North_Bank
+      release: true
+      release_interval: 3600
+      pulse_size: 2000
+      file: release_north_bank.shp
+    - name: Sacramento_South_Bank
+      release: true
+      release_interval: 3600
+      pulse_size: 2000
+      file: release_south_bank.shp
+
+  destination_regions:
+    - name: Suisun_Bay
+      file: suisun_bay.shp
+    - name: Suisun_Marsh
+      file: suisun_marsh.shp
+    - name: Montezuma_Slough
+      file: montezuma.shp
+    - name: South_Suisun_Marsh
+      file: south_suisun_marsh.shp
+    - name: West_Suisun_Marsh
+      file: west_suisun_marsh.shp
+
+# ---------------------------------------------------------------------------
+# OceanTracker run settings (rendered into params/base/config.yaml)
+# ---------------------------------------------------------------------------
+reader:
+  file_mask: "*.nc"
+
+run:
+  duration: 259200    # 3 days in seconds (test); use 5184000 for 60-day production runs
+  time_step: 120      # seconds
+  write_tracks: true

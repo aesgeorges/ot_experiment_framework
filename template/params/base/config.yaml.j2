@@ -1,52 +1,45 @@
 # =============================================================================
-# Baseline OceanTracker configuration for experiment: {{ name }}
+# Baseline OceanTracker run configuration for experiment: {{ name }}
 # Generated from: {{ _config_file }}
 #
-# This file is the baseline config.  Run-specific overrides live in prod/.
-# setup.py merges prod/ overrides on top of this file at runtime.
+# This file is the starting-point OceanTracker run config.  setup.py reads
+# this file (or a per-gate variant named gate_<suffix>.yaml next to it),
+# mutates it programmatically (adding releases, statistics, input_dir, etc.),
+# and writes the final parameter YAML to params/prod/.
+#
+# Prod-only overrides can also be placed in params/prod/<scenario>.yaml;
+# those are NOT auto-merged — setup.py handles merging explicitly.
 # =============================================================================
-
-experiment:
-  name: "{{ name }}"
-  description: "{{ description | default('') }}"
 
 # ---------------------------------------------------------------------------
 # Hydrodynamic reader
 # ---------------------------------------------------------------------------
 reader:
-  class_name: oceantracker.reader.schism_reader.SCHISMreaderNCDF
-  input_dir: "../data/hydro"
+  class_name: SCHISMreaderV5
+  input_dir: "{{ paths.hindcasts_symlink_dir | default('../data/hydro') }}"
   file_mask: "{{ reader.file_mask | default('*.nc') }}"
 
 # ---------------------------------------------------------------------------
 # Run settings
 # ---------------------------------------------------------------------------
-run:
-  root_output_dir: "../outputs/PTM"
-  output_file_base: "{{ name }}"
-  duration: {{ run.duration | default(86400) }}   # seconds
-  time_step: {{ run.time_step | default(120) }}    # seconds
-  write_tracks: {{ run.write_tracks | default(true) }}
+root_output_dir: "{{ user.output_dir | default('../outputs/PTM/') }}"
+output_file_base: "{{ name }}"
+max_run_duration: {{ run.duration | default(604800) }}   # seconds (default: 7 days)
+time_step: {{ run.time_step | default(120) }}    # seconds
+write_tracks: {{ run.write_tracks | default(true) }}
 
 # ---------------------------------------------------------------------------
-# Release groups
+# Release groups — populated programmatically by setup.py
 # ---------------------------------------------------------------------------
-release_groups:
-{%- for rg in release_groups | default([]) %}
-  - name: "{{ rg.name }}"
-    class_name: {{ rg.class_name | default('oceantracker.release_groups.point_release.PointRelease') }}
-    points:
-{%- for pt in rg.points | default([]) %}
-      - [{{ pt[0] }}, {{ pt[1] }}]
-{%- else %}
-      []  # placeholder — populate in setup.py
-{%- endfor %}
-    release_interval: {{ rg.release_interval | default(3600) }}
-    pulse_size: {{ rg.pulse_size | default(1) }}
-{%- endfor %}
+release_groups: []
 
 # ---------------------------------------------------------------------------
-# Particle properties (extend in setup.py as needed)
+# Particle statistics — populated programmatically by setup.py
+# ---------------------------------------------------------------------------
+particle_statistics: []
+
+# ---------------------------------------------------------------------------
+# Particle properties
 # ---------------------------------------------------------------------------
 particle_properties: []
 

@@ -7,6 +7,7 @@ Usage:
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -19,6 +20,36 @@ from framework.renderer import render_template_dir
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _TEMPLATE_DIR = _REPO_ROOT / "template"
 _EXPERIMENTS_DIR = _REPO_ROOT / "experiments"
+_SAMPLE_POLYGONS_DIR = _REPO_ROOT / "sample_files" / "polygons"
+
+
+def _copy_polygons(config: dict, dest_dir: Path) -> None:
+    """Copy referenced polygon files from sample_files/polygons/ into the experiment."""
+    polygon_cfg = config.get("polygons", {})
+    all_regions = (
+        polygon_cfg.get("release_regions", [])
+        + polygon_cfg.get("destination_regions", [])
+    )
+
+    filenames = [r["file"] for r in all_regions if "file" in r]
+    if not filenames:
+        return
+
+    poly_dest = dest_dir / "data" / "polygons"
+    poly_dest.mkdir(parents=True, exist_ok=True)
+
+    for fname in filenames:
+        stem = Path(fname).stem
+        matches = list(_SAMPLE_POLYGONS_DIR.glob(f"{stem}.*"))
+        if not matches:
+            click.echo(
+                f"  Warning: no sample files found for '{fname}' in {_SAMPLE_POLYGONS_DIR}",
+                err=True,
+            )
+            continue
+        for src in matches:
+            shutil.copy2(src, poly_dest / src.name)
+        click.echo(f"  Polygons: copied {len(matches)} file(s) for '{stem}'")
 
 
 def _load_config(config_path: Path) -> dict:
@@ -88,6 +119,14 @@ def cli(config: Path, experiments_dir: Path | None, dry_run: bool) -> None:
         click.echo(f"[dry-run] Would create: {dest_dir}")
         click.echo(f"[dry-run] Template:     {_TEMPLATE_DIR}")
         click.echo(f"[dry-run] Context keys: {list(context.keys())}")
+        polygon_cfg = experiment_config.get("polygons", {})
+        all_regions = (
+            polygon_cfg.get("release_regions", [])
+            + polygon_cfg.get("destination_regions", [])
+        )
+        filenames = [r["file"] for r in all_regions if "file" in r]
+        if filenames:
+            click.echo(f"[dry-run] Polygons to copy: {filenames}")
         return
 
     click.echo(f"Generating experiment '{experiment_name}' ...")
@@ -97,6 +136,7 @@ def cli(config: Path, experiments_dir: Path | None, dry_run: bool) -> None:
 
     try:
         render_template_dir(_TEMPLATE_DIR, dest_dir, context)
+        _copy_polygons(experiment_config, dest_dir)
     except FileExistsError as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)

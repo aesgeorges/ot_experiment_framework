@@ -2,81 +2,77 @@
 # Experiment-level configuration: {{ name }}
 # Generated from: {{ _config_file }}
 #
-# This file controls HIGH-LEVEL experiment behaviour.
-# Individual run parameters live in params/base/config.yaml (OceanTracker
-# baseline) and params/prod/<variant>.yaml (run-specific overrides).
+# This file controls HIGH-LEVEL experiment behaviour read by scripts/setup.py
+# at runtime.  OceanTracker per-scenario configs live in params/base/ and
+# params/prod/.
 # =============================================================================
 
-experiment:
-  name: "{{ name }}"
-  description: "{{ description | default('') }}"
+# ---------------------------------------------------------------------------
+# User / cluster settings
+# ---------------------------------------------------------------------------
+user:
+  email: "{{ user.email | default('user@institution.edu') }}"
+  conda_path: "{{ user.conda_path | default('/path/to/miniconda3/etc/profile.d/conda.sh') }}"
+  env: "{{ user.env | default('oceantracker') }}"
+  viz_env: "{{ user.viz_env | default('oceantracker_viz') }}"
+  output_dir: "{{ user.output_dir | default('/scratch/ptm/') }}"
 
 # ---------------------------------------------------------------------------
-# Reader class — determines which hydrodynamic format OceanTracker reads
-# ---------------------------------------------------------------------------
-reader:
-  class_name: oceantracker.reader.schism_reader.SCHISMreaderNCDF
-
-# ---------------------------------------------------------------------------
-# Paths (relative to experiment root)
+# Data and output paths (relative to experiment root)
 # ---------------------------------------------------------------------------
 paths:
-  hydro_dir: "../data/hydro"
-  polygon_dir: "../data/polygons"
-  processed_dir: "../data/processed"
-  output_dir: "../outputs/PTM"
-  log_dir: "../logs"
-# =============================================================================
-# Baseline OceanTracker configuration for experiment: {{ name }}
-# Generated from: {{ _config_file }}
-#
-# This file is the baseline config.  Run-specific overrides live in prod/.
-# setup.py merges prod/ overrides on top of this file at runtime.
-# =============================================================================
-
-experiment:
-  name: "{{ name }}"
-  description: "{{ description | default('') }}"
+  polygons_dir: "{{ paths.polygons_dir | default('../data/polygons') }}"
+  oceantracker_base_dir: "{{ paths.oceantracker_base_dir | default('../params/base') }}"
+  tile_cache_dir: "{{ paths.tile_cache_dir | default('../outputs/animations/tiles_cache') }}"
+  hindcasts_source_dir: "{{ paths.hindcasts_source_dir | default('/path/to/hindcasts/') }}"
+  hindcasts_symlink_dir: "{{ paths.hindcasts_symlink_dir | default('../data/hydro/') }}"
+  use_symlink_inputs: {{ paths.use_symlink_inputs | default(false) }}  # set true to build per-period symlink dirs from hindcasts_source_dir
 
 # ---------------------------------------------------------------------------
-# Hydrodynamic reader
+# Flow configurations — one OceanTracker baseline YAML per entry
+# (file: params/base/gate_<suffix>.yaml)
 # ---------------------------------------------------------------------------
-reader:
-  class_name: oceantracker.reader.schism_reader.SCHISMreaderNCDF
-  input_dir: "../data/hydro"
-  file_mask: "{{ reader.file_mask | default('*.nc') }}"
-
-# ---------------------------------------------------------------------------
-# Run settings
-# ---------------------------------------------------------------------------
-run:
-  root_output_dir: "../outputs/PTM"
-  output_file_base: "{{ name }}"
-  duration: {{ run.duration | default(86400) }}   # seconds
-  time_step: {{ run.time_step | default(120) }}    # seconds
-  write_tracks: {{ run.write_tracks | default(true) }}
-
-# ---------------------------------------------------------------------------
-# Release groups
-# ---------------------------------------------------------------------------
-release_groups:
-{%- for rg in release_groups | default([]) %}
-  - name: "{{ rg.name }}"
-    class_name: oceantracker.release_groups.point_release.PointRelease
-    points:
-{%- for pt in rg.points %}
-      - [{{ pt[0] }}, {{ pt[1] }}]
-{%- endfor %}
-    release_interval: {{ rg.release_interval | default(3600) }}
-    pulse_size: {{ rg.pulse_size | default(1) }}
+flow_configs:
+{%- for fc in flow_configs | default([]) %}
+  - name: "{{ fc.name }}"
+    suffix: "{{ fc.suffix }}"
+{%- else %}
+  []  # populate with e.g. {name: 'Baseline', suffix: 'baseline'}
 {%- endfor %}
 
 # ---------------------------------------------------------------------------
-# Particle properties (extend in setup.py as needed)
+# Simulation periods — one PTM run per (flow_config x period) combination
 # ---------------------------------------------------------------------------
-particle_properties: []
+simulation_periods:
+{%- for p in simulation_periods | default([]) %}
+  - name: {{ p.name }}
+    start_date: {{ p.start_date }}
+    n_releases: {{ p.n_releases | default(4) }}
+    release_spacing_days: {{ p.release_spacing_days | default(7) }}
+    start_id: {{ p.start_id }}
+    end_id: {{ p.end_id }}
+{%- else %}
+  []  # populate with start_date, n_releases, start_id, end_id, etc.
+{%- endfor %}
 
 # ---------------------------------------------------------------------------
-# Event loggers
+# Polygons — used by setup.py to build releases and statistics
 # ---------------------------------------------------------------------------
-event_loggers: []
+polygons:
+  release_regions:
+{%- for rr in polygons.release_regions | default([]) %}
+    - name: "{{ rr.name }}"
+      release: {{ rr.release | default(true) }}
+      release_interval: {{ rr.release_interval | default(3600) }}
+      pulse_size: {{ rr.pulse_size | default(1000) }}
+      file: "{{ rr.file }}"
+{%- else %}
+    []  # populate with polygon file references
+{%- endfor %}
+  destination_regions:
+{%- for dr in polygons.destination_regions | default([]) %}
+    - name: "{{ dr.name }}"
+      file: "{{ dr.file }}"
+{%- else %}
+    []  # populate with polygon file references
+{%- endfor %}
