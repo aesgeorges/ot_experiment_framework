@@ -24,9 +24,9 @@ reader:
 # ---------------------------------------------------------------------------
 root_output_dir: "{{ user.output_dir | default('../outputs/PTM/') }}"
 output_file_base: "{{ name }}"
-max_run_duration: {{ run.duration | default(604800) }}   # seconds (default: 7 days)
-time_step: {{ run.time_step | default(120) }}    # seconds
-write_tracks: {{ run.write_tracks | default(true) }}
+max_run_duration: {{ max_run_duration | default(604800) }}   # seconds (default: 7 days)
+time_step: {{ time_step | default(120) }}    # seconds
+write_tracks: {{ write_tracks | default(true) }}
 
 # ---------------------------------------------------------------------------
 # Release groups — populated programmatically by setup.py

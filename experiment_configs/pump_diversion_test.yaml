@@ -1,0 +1,91 @@
+# =============================================================================
+# Pump Diversion Sink Test Experiment Configuration
+#
+# Baseline OceanTracker run for exploring how OceanTracker handles current
+# sink points. Polygon releases are placed close to diversion sink element
+# centroids so that sink behaviour can be examined in isolation.
+#
+#
+# Usage:
+#   ot-generate experiment_configs/pump_diversion_test.yaml
+# =============================================================================
+
+name: pump_diversion_test
+
+description: >
+  Baseline OceanTracker polygon release test to explore how oceantracker handles
+  pumps at SWP and CVP facilities.
+  Particles are released in the South Delta and tracked.
+  No trajectory modifier applied.
+
+# ---------------------------------------------------------------------------
+# User / cluster settings — edit before use
+# ---------------------------------------------------------------------------
+user:
+  email: alexandre.georges@water.ca.gov
+  conda_path: /home/ageorges/miniconda3/etc/profile.d/conda.sh
+  env: oceantracker
+  viz_env: oceantracker_viz
+  output_dir: "../outputs/ptm/"
+
+# ---------------------------------------------------------------------------
+# Paths (relative to experiment root after generation)
+# ---------------------------------------------------------------------------
+paths:
+  hindcasts_symlink_dir: ../data/hydro/
+  hindcasts_source_dir: /home/ageorges/sample_data/SCHISM/ITP2025  # TODO: fill in real path
+  oceantracker_base_dir: ../params/base
+  tile_cache_dir: ../outputs/animations/tiles_cache
+  use_symlink_inputs: false
+
+# ---------------------------------------------------------------------------
+# Hydrodynamic reader and Run Settings
+# ---------------------------------------------------------------------------
+reader:
+  class_name: SCHISMreaderV5
+  input_dir: "../data/hydro/"
+  file_mask: "*.nc"
+
+root_output_dir: "../outputs/PTM/"
+output_file_base: "diversion_sink"
+max_run_duration: 172800   # seconds (default: 2 days)
+time_step: 120    # seconds
+write_tracks: True
+
+# ---------------------------------------------------------------------------
+# Flow configurations — one baseline OceanTracker YAML per gate scenario
+# ---------------------------------------------------------------------------
+flow_configs:
+  - name: Test
+    filename: "config.yaml"
+
+# ---------------------------------------------------------------------------
+# Simulation periods
+# ---------------------------------------------------------------------------
+simulation_periods:
+  - name: test
+    start_date: 2025-06-23
+    n_releases: 1
+    release_spacing_days: 7
+    start_id: 35
+    end_id: 38
+
+# ---------------------------------------------------------------------------
+# Release groups — populated programmatically by setup.py
+# ---------------------------------------------------------------------------
+release_groups: []
+
+# ---------------------------------------------------------------------------
+# Particle statistics — populated programmatically by setup.py
+# ---------------------------------------------------------------------------
+particle_statistics: []
+
+# ---------------------------------------------------------------------------
+# Particle properties
+# ---------------------------------------------------------------------------
+particle_properties: []
+
+# ---------------------------------------------------------------------------
+# Event loggers
+# ---------------------------------------------------------------------------
+event_loggers: []

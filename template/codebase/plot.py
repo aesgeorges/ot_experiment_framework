@@ -9,6 +9,10 @@ Data loading:
 Scenario helpers:
     pull_caseInfo_stats(scenario, outputs_dir)
 
+Gridded spatial statistics (HoloViews / Bokeh):
+    build_gridded_stats_layer(...)    -- time-averaged occupancy (connectivity)
+    build_passage_fraction_layer(...) -- unique-visitor passage fraction (flowpaths)
+
 Static figures (HoloViews / Bokeh):
     arrival_age_histograms(...)
     arrival_count_timeseries(...)
@@ -926,7 +930,7 @@ def build_background(config_path, tiles='CartoLight', axis_lims=None):
 def build_gridded_stats_layer(gridded_nc_path, release_group=0,
                               time_start=None, time_end=None,
                               normalise=True, cmap='viridis', alpha=0.7,
-                              clim=None, utm_crs='EPSG:32610'):
+                              clim=None, agg='mean', utm_crs='EPSG:32610'):
     """
     Build a HoloViews QuadMesh of gridded particle count statistics,
     reprojected to Web Mercator for overlay on a tile basemap.
@@ -935,6 +939,10 @@ def build_gridded_stats_layer(gridded_nc_path, release_group=0,
       - Snapshot:  set time_start == time_end (or pass a single datetime).
       - Averaging: set time_start < time_end to average over [time_start, time_end].
       - Default (both None): uses the final timestep as a snapshot.
+
+    The metric is time-averaged instantaneous occupancy, which is proportional to
+    N_unique_visitors * mean_dwell_time. Use build_passage_fraction_layer for a
+    dwell-time-unbiased flowpath metric.
 
     Args:
         gridded_nc_path:  Path to the stats_gridded_time_2D_*.nc file.
@@ -948,6 +956,8 @@ def build_gridded_stats_layer(gridded_nc_path, release_group=0,
         cmap:             Colormap name.
         alpha:            Layer opacity (0-1).
         clim:             (min, max) colour limits. Auto-scaled if None.
+        agg:              Aggregation over the time window. 'mean' (default,
+                          weights by dwell time) or 'max' (peak occupancy).
         utm_crs:          CRS of the grid coordinates in the NetCDF file.
 
     Returns:
@@ -975,11 +985,18 @@ def build_gridded_stats_layer(gridded_nc_path, release_group=0,
         if not mask.any():
             raise ValueError(
                 f'No timesteps found in window [{ta}, {tb}]. '
-                f'Available range: {times[0]} – {times[-1]}'
+                f'Available range: {times[0]} \u2013 {times[-1]}'
             )
 
         count_window = ds['count'].isel(release_group_dim=rg_idx).values[mask]
-        count = count_window[0] if count_window.shape[0] == 1 else count_window.mean(axis=0)
+        n_steps = count_window.shape[0]
+
+        if n_steps == 1:
+            count = count_window[0]
+        elif agg == 'max':
+            count = count_window.max(axis=0)
+        else:
+            count = count_window.mean(axis=0)
 
     if normalise:
         n_released = float(ds['number_released_each_release_group'].values[rg_idx])
@@ -995,15 +1012,187 @@ def build_gridded_stats_layer(gridded_nc_path, release_group=0,
     xm, ym = to_mercator.transform(xx, yy)
 
     connectivity = np.where(count > 0, count, np.nan)
+    print(
+        f'Connectivity stats ({agg}): min={np.nanmin(connectivity):.4f}, '
+        f'max={np.nanmax(connectivity):.4f}, '
+        f'mean={np.nanmean(connectivity):.4f}'
+    )
 
     hover = HoverTool(tooltips=[('connectivity', '@connectivity{0.0000}')])
-
     mesh = hv.QuadMesh((xm, ym, connectivity), kdims=['x', 'y'], vdims=['connectivity'])
 
     opts = dict(
         cmap=cmap, alpha=alpha,
         colorbar=True,
         colorbar_opts={'title': 'Connectivity' if normalise else 'Count'},
+        tools=[hover],
+        width=800, height=600,
+        apply_ranges=False,
+    )
+    if clim is not None:
+        opts['clim'] = clim
+
+    return mesh.opts(**opts)
+
+
+def build_passage_fraction_layer(case_info_path, gridded_nc_path, release_group=0,
+                                  time_start=None, time_end=None,
+                                  fraction_to_read=None,
+                                  cmap='plasma', alpha=0.7, clim=None,
+                                  utm_crs='EPSG:32610'):
+    """
+    Build a HoloViews QuadMesh of passage fraction: the proportion of loaded
+    particles that ever visited each grid cell during the time window, regardless
+    of how long they stayed.
+
+    Unlike build_gridded_stats_layer (which averages instantaneous occupancy and
+    is biased toward dwell time), this counts unique particle IDs per cell across
+    all timesteps. A cell on a preferred flowpath scores high even if each particle
+    only crossed it briefly.
+
+    Uses the same spatial grid as the gridded stats files so outputs are directly
+    comparable.
+
+    Args:
+        case_info_path:   Path to caseInfo.json.
+        gridded_nc_path:  Path to any stats_gridded_time_2D_*.nc -- used for grid
+                          coordinates and n_released only.
+        release_group:    Integer index or string name of the release group.
+        time_start:       Start of time window ('YYYY-MM-DD HH:MM' string, or
+                          numpy/pandas datetime). None = start of run.
+        time_end:         End of time window (inclusive). None = end of run.
+        fraction_to_read: Float 0-1 to subsample particles for a quick exploratory
+                          run (e.g. 0.1). None = load all particles (default).
+                          Result is normalised to n_loaded, not n_released.
+        cmap:             Colormap name.
+        alpha:            Layer opacity (0-1).
+        clim:             (min, max) colour limits. Auto-scaled if None.
+        utm_crs:          CRS of the grid and track coordinates in the NetCDF files.
+
+    Returns:
+        hv.QuadMesh in Web Mercator (EPSG:3857) coordinates.
+    """
+    from bokeh.models import HoverTool
+
+    # \u2500\u2500 Grid coordinates and n_released from the stats file \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    ds = xr.open_dataset(gridded_nc_path)
+    rg_names = ds['release_group_names'].values.tolist()
+    rg_idx = rg_names.index(release_group) if isinstance(release_group, str) else int(release_group)
+
+    x_centers = ds['x'].values[rg_idx]   # 1D cell centers
+    y_centers = ds['y'].values[rg_idx]   # 1D cell centers
+    n_released = float(ds['number_released_each_release_group'].values[rg_idx])
+    ds.close()
+
+    n_cols = len(x_centers)
+    n_rows = len(y_centers)
+
+    # Build cell edges from centers (assumes uniform spacing)
+    dx = x_centers[1] - x_centers[0]
+    dy = y_centers[1] - y_centers[0]
+    x_edges = np.concatenate([x_centers - dx / 2.0, [x_centers[-1] + dx / 2.0]])
+    y_edges = np.concatenate([y_centers - dy / 2.0, [y_centers[-1] + dy / 2.0]])
+
+    # \u2500\u2500 Load particle tracks \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    tracks = load_tracks(case_info_path, fraction_to_read=fraction_to_read)
+
+    rg_mask = tracks['IDrelease_group'].values == rg_idx
+    tracks_rg = tracks.isel(particle=rg_mask)
+    n_loaded = int(tracks_rg.sizes['particle'])
+
+    # Time window filter -- track time coord is Unix epoch seconds (float)
+    t_all = tracks_rg.coords['time'].values
+    ta = pd.Timestamp(time_start, tz='UTC').timestamp() if time_start is not None else float(t_all[0])
+    tb = pd.Timestamp(time_end,   tz='UTC').timestamp() if time_end   is not None else float(t_all[-1])
+
+    time_mask = (t_all >= ta) & (t_all <= tb)
+    if not time_mask.any():
+        raise ValueError(
+            f'No timesteps found in window [{time_start}, {time_end}]. '
+            f'Track time range: {t_all[0]:.0f} \u2013 {t_all[-1]:.0f} (epoch s)'
+        )
+
+    tracks_win = tracks_rg.isel(time=time_mask)
+    n_t = int(tracks_win.sizes['time'])
+
+    # \u2500\u2500 Flatten (time, particle) \u2192 1D and keep alive positions only \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    # 'alive' matches the alive_grid definition: status > 0
+    # (moving=1, on_bottom=2, stationary=3; 0=not-yet-released, <0=dead/outside)
+    # ravel() is row-major: [t0_p0, t0_p1, ..., tN_p0, tN_p1, ...]
+    # np.tile repeats particle IDs n_t times in the same order
+    x_flat      = tracks_win['x'].values.ravel()
+    y_flat      = tracks_win['y'].values.ravel()
+    status_flat = tracks_win['status'].values.ravel()
+    pid_flat    = np.tile(tracks_win.coords['particle'].values, n_t)
+
+    alive = status_flat > 0
+    x_a   = x_flat[alive]
+    y_a   = y_flat[alive]
+    pid_a = pid_flat[alive]
+
+    print(
+        f'Alive observations in window: {alive.sum():,} '
+        f'(out of {alive.size:,} total; n_loaded={n_loaded}, n_t={n_t})'
+    )
+
+    if alive.sum() == 0:
+        raise ValueError(
+            'No alive particles found in the specified time window. '
+            'Check time_start/time_end and that tracks cover this period.'
+        )
+
+    # \u2500\u2500 Bin positions onto the stats grid \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    col_a = np.searchsorted(x_edges, x_a, side='right') - 1
+    row_a = np.searchsorted(y_edges, y_a, side='right') - 1
+
+    in_bounds = (col_a >= 0) & (col_a < n_cols) & (row_a >= 0) & (row_a < n_rows)
+    col_a = col_a[in_bounds]
+    row_a = row_a[in_bounds]
+    pid_a = pid_a[in_bounds]
+
+    print(f'In-bounds observations: {in_bounds.sum():,} of {alive.sum():,} alive')
+
+    # \u2500\u2500 Count unique visitors per cell (O(n_visits), no n_particles*n_cells matrix) \u2500
+    # Encode each observation as a (particle_id, cell_flat) pair, deduplicate,
+    # then bincount the remaining cell indices.
+    cell_flat = row_a.astype(np.int64) * n_cols + col_a.astype(np.int64)
+    pairs = np.stack([pid_a.astype(np.int64), cell_flat], axis=1)
+    unique_pairs = np.unique(pairs, axis=0)   # one row per unique (pid, cell)
+
+    visitor_count = np.bincount(unique_pairs[:, 1].astype(int), minlength=n_rows * n_cols)
+    passage = visitor_count.reshape(n_rows, n_cols).astype(float)
+
+    # Normalise by n_loaded so the fraction is unbiased when fraction_to_read < 1
+    passage /= n_loaded
+
+    nonzero = passage[passage > 0]
+    if nonzero.size > 0:
+        print(
+            f'Passage fraction  (n_loaded={n_loaded}, n_released={int(n_released)}): '
+            f'min={nonzero.min():.4f}, max={passage.max():.4f}, mean={nonzero.mean():.4f}'
+        )
+    else:
+        print(
+            f'WARNING: no cells had any visitors. '
+            f'All {in_bounds.sum():,} in-bounds positions may be outside the grid. '
+            f'Grid x: [{x_centers[0]:.0f}, {x_centers[-1]:.0f}], '
+            f'y: [{y_centers[0]:.0f}, {y_centers[-1]:.0f}]'
+        )
+
+    # \u2500\u2500 Reproject to Web Mercator and build QuadMesh \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    to_mercator = Transformer.from_crs(utm_crs, 'EPSG:3857', always_xy=True)
+    xx, yy = np.meshgrid(x_centers, y_centers)
+    xm, ym = to_mercator.transform(xx, yy)
+
+    pf = np.where(passage > 0, passage, np.nan)
+
+    hover = HoverTool(tooltips=[('passage fraction', '@passage_fraction{0.0000}')])
+    mesh = hv.QuadMesh((xm, ym, pf), kdims=['x', 'y'], vdims=['passage_fraction'])
+
+    opts = dict(
+        cmap=cmap, alpha=alpha,
+        colorbar=True,
+        colorbar_opts={'title': 'Passage fraction'},
         tools=[hover],
         width=800, height=600,
         apply_ranges=False,

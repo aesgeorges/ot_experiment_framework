@@ -115,10 +115,10 @@ def add_polygon_statistics(df, update_interval, max_age, stats_type='age',
 def add_gridded_statistics(df, update_interval,
                            rows=1600, cols=1600,
                            span_x=160000, span_y=160000,
-                           release_group_centered_grids=True,
-                           status_list=None):
+                           release_group_centered_grids=True):
     """
-    Build an OceanTracker GriddedStats2D_timeBased configuration.
+    Build OceanTracker GriddedStats2D_timeBased configurations, one per
+    particle-status group.
 
     Args:
         df:                           GeoDataFrame (unused when
@@ -130,26 +130,27 @@ def add_gridded_statistics(df, update_interval,
         span_x:                       East-west grid extent in metres.
         span_y:                       North-south grid extent in metres.
         release_group_centered_grids: Centre grid on each release point.
-        status_list:                  Particle statuses to count; defaults to
-                                      ['moving', 'on_bottom', 'stranded_by_tide'].
 
     Returns:
-        List containing a single particle_statistics configuration dict.
+        List of three particle_statistics configuration dicts:
+          - alive_grid:    moving, on_bottom, stationary
+          - stranded_grid: stranded_by_tide
+          - outside_grid:  outside_open_boundary
     """
-    if status_list is None:
-        status_list = ['moving', 'on_bottom', 'stranded_by_tide']
-
-    return [{
-        'class_name': 'GriddedStats2D_timeBased',
-        'name': 'connectivity_grid',
-        'rows': rows,
-        'cols': cols,
-        'span_x': span_x,
-        'span_y': span_y,
-        'release_group_centered_grids': release_group_centered_grids,
-        'update_interval': int(update_interval),
-        'status_list': status_list,
-    }]
+    shared = dict(
+        class_name='GriddedStats2D_timeBased',
+        rows=rows,
+        cols=cols,
+        span_x=span_x,
+        span_y=span_y,
+        release_group_centered_grids=release_group_centered_grids,
+        update_interval=int(update_interval),
+    )
+    return [
+        {**shared, 'name': 'alive_grid',    'status_list': ['moving', 'on_bottom', 'stationary']},
+        {**shared, 'name': 'stranded_grid', 'status_list': ['stranded_by_tide']},
+        {**shared, 'name': 'outside_grid',  'status_list': ['outside_open_boundary']},
+    ]
 
 
 def create_period_input_dir(source_dir, start_id, end_id, period_dir):
@@ -205,13 +206,14 @@ def setup_ptm(config_path='../params/config.yaml'):
     all_polygons = pd.concat([release_gdf, dest_gdf], ignore_index=True)
 
     all_params, param_names = [], []
-    for gate in config['flow_configs']:
+    for flow_config in config['flow_configs']:
+        filename = flow_config['filename']
         base_param_path = os.path.join(
-            base_params_dir, f"gate_{gate['suffix']}.yaml"
+            base_params_dir, f"{filename}.yaml"
         )
         base_param    = yaml_util.read_YAML(base_param_path)
         base_input_dir = os.path.join(
-            config['paths']['hindcasts_symlink_dir'], gate['suffix'], ''
+            config['paths']['hindcasts_symlink_dir'], filename, ''
         )
 
         for period in config['simulation_periods']:
@@ -220,7 +222,7 @@ def setup_ptm(config_path='../params/config.yaml'):
             if config['paths'].get('use_symlink_inputs', True):
                 period_input_dir = os.path.join(
                     config['paths']['hindcasts_symlink_dir'],
-                    f"{gate['suffix']}_{period['name']}",
+                    f"{filename}_{period['name']}",
                 )
                 create_period_input_dir(
                     base_input_dir,
@@ -233,10 +235,10 @@ def setup_ptm(config_path='../params/config.yaml'):
 
             run_param['root_output_dir'] = (
                 f"{config['user']['output_dir']}"
-                f"{gate['suffix']}_{period['name']}"
+                f"{filename}_{period['name']}"
             )
 
-            max_age_days = config['run']['duration'] / 86400
+            max_age_days = config['max_run_duration'] / 86400
 
             run_param['release_groups'] = add_polygon_releases(
                 release_gdf,
@@ -260,7 +262,7 @@ def setup_ptm(config_path='../params/config.yaml'):
             )
 
             all_params.append(run_param)
-            param_names.append(f"{gate['suffix']}_{period['name']}")
+            param_names.append(f"{filename}_{period['name']}")
 
     return all_params, param_names
 

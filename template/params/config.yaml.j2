@@ -30,14 +30,14 @@ paths:
 
 # ---------------------------------------------------------------------------
 # Flow configurations — one OceanTracker baseline YAML per entry
-# (file: params/base/gate_<suffix>.yaml)
+# (file: params/base/<filename>.yaml)
 # ---------------------------------------------------------------------------
 flow_configs:
 {%- for fc in flow_configs | default([]) %}
   - name: "{{ fc.name }}"
-    suffix: "{{ fc.suffix }}"
+    filename: "{{ fc.filename }}"
 {%- else %}
-  []  # populate with e.g. {name: 'Baseline', suffix: 'baseline'}
+  []  # populate with e.g. {name: 'Baseline', filename: 'baseline'}
 {%- endfor %}
 
 # ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ simulation_periods:
 # ---------------------------------------------------------------------------
 polygons:
   release_regions:
-{%- for rr in polygons.release_regions | default([]) %}
+{%- for rr in (polygons | default({})).release_regions | default([]) %}
     - name: "{{ rr.name }}"
       release: {{ rr.release | default(true) }}
       release_interval: {{ rr.release_interval | default(3600) }}
@@ -70,7 +70,7 @@ polygons:
     []  # populate with polygon file references
 {%- endfor %}
   destination_regions:
-{%- for dr in polygons.destination_regions | default([]) %}
+{%- for dr in (polygons | default({})).destination_regions | default([]) %}
     - name: "{{ dr.name }}"
       file: "{{ dr.file }}"
 {%- else %}
@@ -78,9 +78,18 @@ polygons:
 {%- endfor %}
 
 # ---------------------------------------------------------------------------
-# OceanTracker run settings — read by setup.py
+# Hydrodynamic reader — read by setup.py
 # ---------------------------------------------------------------------------
-run:
-  duration: {{ run.duration | default(259200) }}    # seconds; 259200 = 3 days, 5184000 = 60 days
-  time_step: {{ run.time_step | default(120) }}      # seconds
-  write_tracks: {{ run.write_tracks | default(true) }}
+reader:
+  class_name: "{{ (reader | default({})).class_name | default('SCHISMreaderV5') }}"
+  input_dir: "{{ (reader | default({})).input_dir | default('../data/hydro/') }}"
+  file_mask: "{{ (reader | default({})).file_mask | default('*.nc') }}"
+
+# ---------------------------------------------------------------------------
+# OceanTracker run settings (top-level fields) — read by setup.py
+# ---------------------------------------------------------------------------
+root_output_dir: "{{ root_output_dir | default('../outputs/PTM/') }}"
+output_file_base: "{{ output_file_base | default(name) }}"
+max_run_duration: {{ max_run_duration | default(604800) }}   # seconds (default: 7 days)
+time_step: {{ time_step | default(120) }}    # seconds
+write_tracks: {{ write_tracks | default(true) }}
