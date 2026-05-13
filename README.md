@@ -218,7 +218,7 @@ The `params/prod/` directory therefore contains **fully resolved** parameter fil
 
 Manual override YAMLs can still be placed in `params/prod/` as secondary entries if you need to run a one-off variation outside the (flow_config × period) matrix.
 
-To extend the parameter generation with custom logic (e.g. dynamic release points, additional particle properties), edit `scripts/setup.py` directly — changes you make there take effect the next time you run `main.py setup`.
+To extend the parameter generation with custom logic (e.g. dynamic release points, additional particle properties), edit `scripts/setup.py` directly. Changes you make there take effect the next time you run `main.py setup`.
 
 ---
 
@@ -250,7 +250,7 @@ This is the starting-point OceanTracker run configuration (reader settings, run 
 
 ## Extending setup.py
 
-`experiments/<name>/scripts/setup.py` is the place for programmatic extensions to the parameter generation — for example, adding custom OceanTracker particle property classes, computing release points dynamically, or adjusting run settings per scenario:
+`experiments/<name>/scripts/setup.py` is the place for programmatic extensions to the parameter generation such as adding custom OceanTracker particle property classes, computing release points dynamically, or adjusting run settings per scenario:
 
 ```python
 # inside setup_ptm(), after building the base params dict:
